@@ -1,6 +1,6 @@
-# Kisi's Android ST2U SDK
+# Kisi's Android T2A SDK
 
-This project implements Kisi's secure tap to unlock algorithm.
+This project implements Kisi's "Tap to Access" algorithm (see the `library` module). It is meant to be used by Kisi's own Android app and integrated as a white-label SDK into our clients' apps.
 
 ## Requirements
 
@@ -9,9 +9,9 @@ This project implements Kisi's secure tap to unlock algorithm.
 
 ## Integration
 
-### Build files
+### Build Files
 
-Add the latest AAR file (check the Releases page on Github) into your app module (`app/libs` by default), then open the `build.gradle` file of your app module and add dependencies needed by the SDK:
+Get the latest AAR file from the [Releases](https://github.com/kisi-inc/kisi-android-st2u-sdk-public/releases) page and add it into your app module (`app/libs` by default), then open the `build.gradle` file of your app module and add dependencies needed by the SDK:
 
 ```gradle
 
@@ -26,9 +26,9 @@ dependencies {
 
 Sync the project with Gradle files.
 
-### Card emulation
+### Card Emulation
 
-Kisi's Secure Tap to Unlock ("S2U") technology for Android is based on Android's [Host-based Card Emulation](https://developer.android.com/guide/topics/connectivity/nfc/hce) (or HCE), so the integration of the SDK in question consists of tying together the Android's entry point into host card emulation (called [HostApduService](https://developer.android.com/reference/android/nfc/cardemulation/HostApduService)) and Kisi's code.
+Kisi's "Tap to Access" ("T2A") technology for Android is based on Android's [Host-based Card Emulation](https://developer.android.com/guide/topics/connectivity/nfc/hce) (or HCE), so the integration of the SDK in question consists of tying together the Android's entry point into host card emulation (called [HostApduService](https://developer.android.com/reference/android/nfc/cardemulation/HostApduService)) and Kisi's code.
 
 We need to create a subclass of HostApduService, so let's take a look at how the sample implementation can look like:
 
@@ -44,7 +44,8 @@ class ScramTestService : HostApduService() {
         super.onCreate()
 
         offlineMode = Scram3.with(
-            applicationContext,
+            clientId = 777,
+            context = applicationContext,
             loginFetcher = { organizationId: Int? ->
                 Maybe.just(
                     Login(
@@ -55,7 +56,7 @@ class ScramTestService : HostApduService() {
                     )
                 )
             },
-            unlockFailureListener = { }
+            onUnlockComplete = { }
         )
     }
 
@@ -84,10 +85,13 @@ class ScramTestService : HostApduService() {
 }
 ```
 
-The key component that you're going to use is an implementation of `IOfflineMode` interface; at the time of this writing, there is only one implementation called `Scram3`. This class requires two parameters to perform its duties:
+The key component that you're going to use is an implementation of `IOfflineMode` interface; at the time of this writing, there is only one implementation called `Scram3`. This class requires three parameters to perform its duties:
 
-* An instance of Android's [Context](https://developer.android.com/reference/android/content/Context) class.
+* An instance of Android's [Context](https://developer.android.com/reference/android/content/Context) class
+* An integration partner specific id
 * And a callback that returns an instance of Login class wrapped in RxJava's [Maybe](http://reactivex.io/RxJava/3.x/javadoc/io/reactivex/rxjava3/core/Maybe.html).
+
+An integration partner  specific id is a value that is used by Kisi to collect information on how different integrations perform and to offer help based on the integration partner specific logs. The information collected does not include any personal data. Please request a partner id by sending an email to sdks@kisi.io.
 
 An instance of `Login` contains 4 properties, all of which you will get while signing the user in via [Kisi's API](https://api.kisi.io/docs/#tag/Logins/paths/~1logins/post):
 
@@ -125,23 +129,102 @@ The last thing to do is to add the service to the app's manifest:
 
 `hce_service` is an XML file shipped with Kisi's SDK. It defines the set of properties used by Android OS to determine which of the installed applications will handle an incoming NFC connection. You should not override this file because otherwise, Android OS won't pick your application as a handler of an incoming connection from Kisi's reader.
 
+**Note: it's important that you don't start this service yourself during e.g. the start of your application**. It's Android OS's duty to start and stop this service when the smartphone is in the close vicinity of a Reader. Starting this service yourself will lead to unexpected results such as failed unlocks.
+
 Build your app and make sure that SDK functions as expected.
 
-### Optional parameters of Scram3
+### Optional Parameters of Scram3
 
-`unlockFailureListener` is an optional parameter that you can provide to be notified about unlocking errors. ' UnlockError` enumeration defines the list of existing errors:
+`onUnlockComplete` is an optional parameter that you can provide to be notified when the unlock sequence gets completed. `UnlockError` enumeration defines the list of existing errors:
 
 ```kotlin
 enum class UnlockError {
+
+    NONE,
+
+    UNEXPECTED_COMMAND,
+    LOCAL_LOGIN_MISSING,
+
+    READER_PROOF_VALIDATION,
+
+    CERTIFICATE_FETCH_DENIED,
 
     PHONE_LOCKED,
     PHONE_LOCK_MISSING
 }
 ```
 
-Both errors correspond to Kisi's implementation of [two-factor authentication](https://www.getkisi.com/features/2fa) for unlocks. If the place administrator has enabled 2FA for premises, we're trying to answer two questions when unlock is happening:
+The `NONE` value corresponds to the successful completion of the unlock data exchange. It doesn't mean that the door will be unlocked - once the Reader gets the last piece of data, it sends an unlock request to the cloud, and this request may fail if, e.g., the user does not have access right to that particular door. So receiving the `NONE` value means that the smartphone and the Reader are done communicating with each other.
+
+The `LOCAL_LOGIN_MISSING` value is returned when the `loginFetcher` method could not return a valid `Login` object.
+
+`CERTIFICATE_FETCH_DENIED` value may be returned when the Reader is in the offline mode. In this case, the Reader needs the smartphone to request the temporary certificate from Kisi's API, and this request may fail due to the lack of access rights.
+
+`PHONE_LOCKED` and `PHONE_LOCK_MISSING` correspond to Kisi's implementation of [two-factor authentication](https://www.getkisi.com/features/2fa) for unlocks. If the place administrator has enabled 2FA for premises, we're trying to answer two questions when unlock is happening:
 
 1. Is the screen lock enabled on this device?
 2. If it's enabled, is the screen currently locked?
 
 If the answer to any of these two questions is negative, the notification asking the user to either enable the screen lock or unlock the device to prove their identity pops up on the screen. But what if the user has deliberately turned off notifications on their device? In this case, you can use the provided callback to be notified about an error and act accordingly later. E.g., you can show a popup in your application next time the user opens it to let them know that notifications need to be turned on.
+
+`UNEXPECTED_COMMAND` and `READER_PROOF_VALIDATION` are the errors corresponding to the internal implementation of the unlock algorithm and are mainly exposed to be able to gather analytics.
+
+### KisiBeaconTracker
+
+If you want to be able to unlock Kisi-equipped doors from the application UI, you may encounter the situation where to unlock you need to know the lock's `proximity_proof` (see [here](https://api.kisi.io/docs/#/operations/unlockLock)).
+
+To find one, you can use the class called `KisiBeaconTracker` shipped with this SDK. The instance of this class performs periodic Bluetooth Low Energy (or BLE) scans to find Kisi's Readers nearby. Each Reader is equipped with a BLE beacon emitting a signal that contains this proof. Whenever a tracker finds a beacon, it calculates its proximity proof and delivers it to you. Whenever the Reader is lost from the close vicinity (or its proximity proof is changed), you're notified as well.
+
+First of all, add the required permissions to your app's manifest:
+
+```xml
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+
+</manifest>
+```
+
+Then, create an instance of `KisiBeaconTracker` (we recommend doing it in the Activity hosting the list of locks, in which case you will be able to use Activity's lifecycle and start/stop scans accordingly):
+
+```kotlin
+private val beaconTracker = KisiBeaconTracker(
+    context,
+    onScanFailure = { e ->
+        // Here you can get notifications about beacon scan failures
+    },
+    onBeaconsDetected = { beacons ->
+        // TODO handle beacons
+    }
+)
+```
+
+Start a scanner when activity is resumed, stop it when it's paused:
+
+```kotlin
+override fun onResume() {
+    super.onResume()
+    beaconTracker.startRanging()
+}
+
+override fun onPause() {
+    super.onPause()
+    beaconTracker.stopRanging()
+}
+```
+
+The `onBeaconsDetected` callback will be called each time there is a change in the nearby Kisi beacons. It will give you a `Set` of `KisiBeacon` instances:
+
+```kotlin
+data class KisiBeacon(
+    val lockId: Long,
+    val totp: Int = 0
+)
+```
+
+To unlock a door with a Reader restriction, you need to find its beacon in the current set of nearby beacons and pass the `totp` parameter as a `proximity_proof`.
+
+Please also note that Location permission is considered to be a runtime one in Android, which means the user might revoke it at any time (or even deny it). You need to make sure Location permission is allowed for foreground usage and Bluetooth/Location services are turned on to find beacons.
