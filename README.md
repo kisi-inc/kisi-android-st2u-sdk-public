@@ -55,7 +55,7 @@ class ScramTestService : HostApduService() {
                     )
                 )
             },
-            unlockFailureListener = { }
+            onUnlockComplete = { }
         )
     }
 
@@ -84,9 +84,9 @@ class ScramTestService : HostApduService() {
 }
 ```
 
-The key component that you're going to use is an implementation of `IOfflineMode` interface; at the time of this writing, there is only one implementation called `Scram3`. This class requires two parameters to perform its duties:
+The key component that you're going to use is an implementation of `IOfflineMode` interface; at the time of this writing, there is only one implementation called `Scram3`. This class requires three parameters to perform its duties:
 
-* An instance of Android's [Context](https://developer.android.com/reference/android/content/Context) class.
+* An instance of Android's [Context](https://developer.android.com/reference/android/content/Context) class
 * And a callback that returns an instance of Login class wrapped in RxJava's [Maybe](http://reactivex.io/RxJava/3.x/javadoc/io/reactivex/rxjava3/core/Maybe.html).
 
 An instance of `Login` contains 4 properties, all of which you will get while signing the user in via [Kisi's API](https://api.kisi.io/docs/#tag/Logins/paths/~1logins/post):
@@ -125,11 +125,13 @@ The last thing to do is to add the service to the app's manifest:
 
 `hce_service` is an XML file shipped with Kisi's SDK. It defines the set of properties used by Android OS to determine which of the installed applications will handle an incoming NFC connection. You should not override this file because otherwise, Android OS won't pick your application as a handler of an incoming connection from Kisi's reader.
 
+**Note: it's important that you don't start this service yourself during e.g. the start of your application**. It's Android OS's duty to start and stop this service when the smartphone is in the close vicinity of a Reader. Starting this service yourself will lead to unexpected results such as failed unlocks.
+
 Build your app and make sure that SDK functions as expected.
 
 ### Optional parameters of Scram3
 
-`onErrorComplete` is an optional parameter that you can provide to be notified when the unlock sequence gets completed. `UnlockError` enumeration defines the list of existing errors:
+`onUnlockComplete` is an optional parameter that you can provide to be notified when the unlock sequence gets completed. `UnlockError` enumeration defines the list of existing errors:
 
 ```kotlin
 enum class UnlockError {
