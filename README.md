@@ -1,11 +1,20 @@
-# Kisi's Android T2A SDK
+## What "Tap-to-Unlock" is
 
-This project implements Kisi's "Tap to Access" algorithm (see the `library` module). It is meant to be used by Kisi's own Android app and integrated as a white-label SDK into our clients' apps.
+"Tap-to-Unlock" (or "T2U") is Kisi's technology that makes it possible to access your premises by holding your smartphone up to the Kisi Reader Pro like you would a key card. The Reader will read your phone's Bluetooth (iPhone) or NFC (Android) signal to allow access.
 
-## Requirements
+Before you proceed with the integration of mobile SDK we recommend you to check the following:
+
+### Kisi Readers and Controllers
+
+This is the Kisi's hardware that you are going to use while working on the integration. You need to make sure your reader and controller are powered up, connected to the network, and properly set up. To do that, we recommend reading our [support articles](https://help.kisi.io/hc/en-us/categories/1500000269681-Installation) on hardware installation.
+
+### Login objects
+
+Login object is an entity returned by Kisi's API when the user signs in to Kisi. You need to obtain this object via Kisi's API, store it in the app's local cache and provide to our SDK as a part of its initialization code. To get more info on how Login objects are obtained we recommend to read [our article](https://docs.kisi.io/for_integration_partners/registration_and_authentication) on registration and authentication with Kisi.
+
+## SDK Requirements
 
 - Android 5.0 at minimum
-- Android Studio 2020.3.1
 
 ## Integration
 
@@ -28,7 +37,7 @@ Sync the project with Gradle files.
 
 ### Card Emulation
 
-Kisi's "Tap to Access" ("T2A") technology for Android is based on Android's [Host-based Card Emulation](https://developer.android.com/guide/topics/connectivity/nfc/hce) (or HCE), so the integration of the SDK in question consists of tying together the Android's entry point into host card emulation (called [HostApduService](https://developer.android.com/reference/android/nfc/cardemulation/HostApduService)) and Kisi's code.
+"T2u" technology for Android is based on Android's [Host-based Card Emulation](https://developer.android.com/guide/topics/connectivity/nfc/hce) (or HCE), so the integration of this SDK consists of tying together the Android's entry point into host card emulation (called [HostApduService](https://developer.android.com/reference/android/nfc/cardemulation/HostApduService)) and Kisi's code.
 
 We need to create a subclass of HostApduService, so let's take a look at how the sample implementation can look like:
 
@@ -36,7 +45,7 @@ We need to create a subclass of HostApduService, so let's take a look at how the
 
 class ScramTestService : HostApduService() {
 
-    private lateinit var offlineMode: IOfflineMode
+    private lateinit var offlineMode: Scram3
 
     private var disposable: Disposable? = null
 
@@ -48,6 +57,9 @@ class ScramTestService : HostApduService() {
             context = applicationContext,
             loginFetcher = { organizationId: Int? ->
                 Maybe.just(
+                    // ATTENTION - This is an example Login object that you will need to replace
+                    // with a correct one obtained from Kisi's API. Read our integration docs
+                    // mentioned above to get an idea of how to do that.
                     Login(
                         id = 42,
                         authenticationToken = "35B8ACFCF1F6AB6604CEB9F9157303A9",
@@ -93,12 +105,12 @@ The key component that you're going to use is an implementation of `IOfflineMode
 
 An integration partner  specific id is a value that is used by Kisi to collect information on how different integrations perform and to offer help based on the integration partner specific logs. The information collected does not include any personal data. Please request a partner id by sending an email to sdks@kisi.io.
 
-An instance of `Login` contains 4 properties, all of which you will get while signing the user in via [Kisi's API](https://api.kisi.io/docs/#tag/Logins/paths/~1logins/post):
+An instance of `Login` contains 4 properties, all of which you will get while signing the user in via Kisi's API:
 
 * `id` corresponds to the `id` field of aforementioned request
 * `authenticationToken` corresponds to the `authentication_token` field
 * `phoneKey` corresponds to the `phone_key` field of the `scram_credentials` object
-* `onlineCertificate` corresponds to the `online_certificate` field of the `scram_credentials` objects
+* `onlineCertificate` corresponds to the `online_certificate` field of the `scram_credentials` object
 
 ### Manifest
 
@@ -131,11 +143,11 @@ The last thing to do is to add the service to the app's manifest:
 
 **Note: it's important that you don't start this service yourself during e.g. the start of your application**. It's Android OS's duty to start and stop this service when the smartphone is in the close vicinity of a Reader. Starting this service yourself will lead to unexpected results such as failed unlocks.
 
-Build your app and make sure that SDK functions as expected.
+Build your app and tap the Kisi Reader you have with your smartphone. The green color of Reader's LED means the unlock attempt has succeeded. If you get a red color instead it means the unlock attempt has failed. We recommend to provide `onUnlockComplete` callback and log its argument in logcat to see the failure's reason.
 
 ### Optional Parameters of Scram3
 
-`onUnlockComplete` is an optional parameter that you can provide to be notified when the unlock sequence gets completed. `UnlockError` enumeration defines the list of existing errors:
+`onUnlockComplete` is an optional parameter that you can provide to be notified when the unlock gets completed. `UnlockError` enumeration defines the list of existing errors:
 
 ```kotlin
 enum class UnlockError {
@@ -175,7 +187,19 @@ If you want to be able to unlock Kisi-equipped doors from the application UI, yo
 
 To find one, you can use the class called `KisiBeaconTracker` shipped with this SDK. The instance of this class performs periodic Bluetooth Low Energy (or BLE) scans to find Kisi's Readers nearby. Each Reader is equipped with a BLE beacon emitting a signal that contains this proof. Whenever a tracker finds a beacon, it calculates its proximity proof and delivers it to you. Whenever the Reader is lost from the close vicinity (or its proximity proof is changed), you're notified as well.
 
-First of all, add the required permissions to your app's manifest:
+First of all, add one more dependency to the `build.gradle` file of your application:
+
+```gradle
+
+dependencies {
+
+    ...
+    implementation 'aga.android:luch:0.3.1' 
+    ...
+}
+```
+
+Then add the required permissions to your app's manifest:
 
 ```xml
 
