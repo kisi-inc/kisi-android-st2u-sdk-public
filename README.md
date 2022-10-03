@@ -1,6 +1,6 @@
-## What "Tap-to-Unlock" is
+## What "Tap-to-Access" is
 
-"Tap-to-Unlock" (or "T2U") is Kisi's technology that makes it possible to access your premises by holding your smartphone up to the Kisi Reader Pro like you would a key card. The Reader will read your phone's Bluetooth (iPhone) or NFC (Android) signal to allow access.
+"Tap-to-Access" (or "T2A") is Kisi's technology that makes it possible to access your premises by holding your smartphone up to the Kisi Reader Pro like you would a key card. The Reader will read your phone's Bluetooth (iPhone) or NFC (Android) signal to allow access.
 
 Before you proceed with the integration of mobile SDK we recommend you to check the following:
 
@@ -16,7 +16,7 @@ Login object is an entity returned by Kisi's API when the user signs in to Kisi.
 
 - Android 5.0 at minimum
 
-## Integration
+## Integration of Tap-to-Access
 
 ### Build Files
 
@@ -35,15 +35,19 @@ dependencies {
 
 Sync the project with Gradle files.
 
+### Permissions
+
+Tap-to-Access technology does not require any specific Android permissions. All you need from your users is to make sure they keep NFC on.
+
 ### Card Emulation
 
-"T2u" technology for Android is based on Android's [Host-based Card Emulation](https://developer.android.com/guide/topics/connectivity/nfc/hce) (or HCE), so the integration of this SDK consists of tying together the Android's entry point into host card emulation (called [HostApduService](https://developer.android.com/reference/android/nfc/cardemulation/HostApduService)) and Kisi's code.
+"T2A" technology for Android is based on Android's [Host-based Card Emulation](https://developer.android.com/guide/topics/connectivity/nfc/hce) (or HCE), so the integration of this SDK consists of tying together the Android's entry point into host card emulation (called [HostApduService](https://developer.android.com/reference/android/nfc/cardemulation/HostApduService)) and Kisi's code.
 
 We need to create a subclass of HostApduService, so let's take a look at how the sample implementation can look like:
 
 ```kotlin
 
-class ScramTestService : HostApduService() {
+class KisiNfcUnlockService : HostApduService() {
 
     private lateinit var offlineMode: Scram3
 
@@ -121,7 +125,7 @@ The last thing to do is to add the service to the app's manifest:
     <application>
 
         <service
-            android:name=".ScramTestService"
+            android:name=".KisiNfcUnlockService"
             android:exported="true"
             android:permission="android.permission.BIND_NFC_SERVICE">
 
@@ -166,7 +170,7 @@ enum class UnlockError {
 }
 ```
 
-The `NONE` value corresponds to the successful completion of the unlock data exchange. It doesn't mean that the door will be unlocked - once the Reader gets the last piece of data, it sends an unlock request to the cloud, and this request may fail if, e.g., the user does not have access right to that particular door. So receiving the `NONE` value means that the smartphone and the Reader are done communicating with each other.
+The `NONE` value corresponds to the successful completion of the unlock data exchange. It doesn't mean that the door will be unlocked - once the Reader gets the last piece of data, it sends an unlock request to the cloud, and this request may fail if, e.g., the user does not have access right to that particular door. So receiving the `NONE` value simply means that the smartphone and the Reader are done communicating with each other.
 
 The `LOCAL_LOGIN_MISSING` value is returned when the `loginFetcher` method could not return a valid `Login` object.
 
@@ -181,11 +185,13 @@ If the answer to any of these two questions is negative, the notification asking
 
 `UNEXPECTED_COMMAND` and `READER_PROOF_VALIDATION` are the errors corresponding to the internal implementation of the unlock algorithm and are mainly exposed to be able to gather analytics.
 
-### KisiBeaconTracker
+## Integration of in-app unlocks with Reader Restrictions
 
-If you want to be able to unlock Kisi-equipped doors from the application UI, you may encounter the situation where to unlock you need to know the lock's `proximity_proof` (see [here](https://api.kisi.io/docs/#/operations/unlockLock)).
+If you want to be able to access [Reader-restricted](https://docs.kisi.io/concepts/restrictions/#kisi-reader-restriction) doors from the application UI, then you need to obtain the door's `proximity_proof` (see [here](https://api.kisi.io/docs/#/operations/unlockLock)).
 
 To find one, you can use the class called `KisiBeaconTracker` shipped with this SDK. The instance of this class performs periodic Bluetooth Low Energy (or BLE) scans to find Kisi's Readers nearby. Each Reader is equipped with a BLE beacon emitting a signal that contains this proof. Whenever a tracker finds a beacon, it calculates its proximity proof and delivers it to you. Whenever the Reader is lost from the close vicinity (or its proximity proof is changed), you're notified as well.
+
+### Build Files
 
 First of all, add one more dependency to the `build.gradle` file of your application:
 
@@ -198,6 +204,8 @@ dependencies {
     ...
 }
 ```
+
+### Permissions
 
 Then add the required permissions to your app's manifest:
 
@@ -212,7 +220,15 @@ Then add the required permissions to your app's manifest:
 </manifest>
 ```
 
-Then, create an instance of `KisiBeaconTracker` (we recommend doing it in the Activity hosting the list of locks, in which case you will be able to use Activity's lifecycle and start/stop scans accordingly):
+`ACCESS_FINE_LOCATION` is needed to be able to find BLE beacons. This is a restriction imposed by Android OS because in theory beacons can be used to derive physical location of a device.
+
+Note that `ACCESS_FINE_LOCATION` permission is considered to be a runtime/dangerous one in Android, which means the user might revoke it at any time (or even deny it). You need to make sure Location permission is allowed for foreground usage and Bluetooth/Location services are turned on to find beacons.
+
+`BLUETOOTH` and `BLUETOOTH_ADMIN` permissions are needed to be able to access Bluetooth APIs of Android OS. Both are considered to be normal, i.e. these are granted upon app installation.
+
+### KisiBeaconTracker
+
+Create an instance of `KisiBeaconTracker` (we recommend doing it in the Activity hosting the list of locks, in which case you will be able to use Activity's lifecycle and start/stop scans accordingly):
 
 ```kotlin
 private val beaconTracker = KisiBeaconTracker(
@@ -249,6 +265,4 @@ data class KisiBeacon(
 )
 ```
 
-To unlock a door with a Reader restriction, you need to find its beacon in the current set of nearby beacons and pass the `totp` parameter as a `proximity_proof`.
-
-Please also note that Location permission is considered to be a runtime one in Android, which means the user might revoke it at any time (or even deny it). You need to make sure Location permission is allowed for foreground usage and Bluetooth/Location services are turned on to find beacons.
+To access a door with a Reader restriction, you need to find its beacon in the current set of nearby beacons and pass the `totp` parameter as a `proximity_proof` to Kisi's API.
