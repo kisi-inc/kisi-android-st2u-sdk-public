@@ -66,7 +66,7 @@ class KisiNfcUnlockService : HostApduService() {
                     // mentioned above to get an idea of how to do that.
                     Login(
                         id = 42,
-                        authenticationToken = "35B8ACFCF1F6AB6604CEB9F9157303A9",
+                        secret = "35B8ACFCF1F6AB6604CEB9F9157303A9",
                         phoneKey = "40CA258E7D5850C62068D70784B0DB7D",
                         onlineCertificate = "6D011D6C6F6D6E276BB6FEF7EFA5F87BBC3E7D9B945C786EAE5C086716F4B5EFF901D94A7DF90A98F1D9CEE6984F9588A8EF4CE59D8B20194A254BD7"
                     )
@@ -112,7 +112,7 @@ An integration partner  specific id is a value that is used by Kisi to collect i
 An instance of `Login` contains 4 properties, all of which you will get while signing the user in via Kisi's API:
 
 * `id` corresponds to the `id` field of aforementioned request
-* `authenticationToken` corresponds to the `authentication_token` field
+* `secret` corresponds to the `secret` field
 * `phoneKey` corresponds to the `phone_key` field of the `scram_credentials` object
 * `onlineCertificate` corresponds to the `online_certificate` field of the `scram_credentials` object
 
