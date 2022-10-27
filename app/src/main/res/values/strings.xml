@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">T2A Sample</string>
-    <string name="info">Replace data in the Login object from UnlockService with the Login data you received while signing your user in to Kisi, run the app and tap your Reader.</string>
+    <string name="info">Tap the reader with the phone. The reader should blink red or green depending on the access rights of the user. If nothing happens, please check that the data in the Login object from UnlockService is updated with the data you received from our API.</string>
 </resources>

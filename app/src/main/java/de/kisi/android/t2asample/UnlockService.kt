@@ -20,7 +20,8 @@ class UnlockService : HostApduService() {
         super.onCreate()
 
         offlineMode = Scram3.with(
-            applicationContext,
+            clientId = 777, // Replace it with an integration partner id you received from us
+            context = applicationContext,
             loginFetcher = {
                 // In the release version of your app you'd probably sign in your user to Kisi API
                 // at some point of your user flow, and store the data of the Login object in the
@@ -29,7 +30,7 @@ class UnlockService : HostApduService() {
                 Maybe.just(
                     Login(
                         id = 42,
-                        authenticationToken = "35B8ACFCF1F6AB6604CEB9F9157303A9",
+                        secret = "35B8ACFCF1F6AB6604CEB9F9157303A9",
                         phoneKey = "40CA258E7D5850C62068D70784B0DB7D",
                         onlineCertificate = "6D011D6C6F6D6E276BB6FEF7EFA5F87BBC3E7D9B945C786EAE5C086716F4B5EFF901D94A7DF90A98F1D9CEE6984F9588A8EF4CE59D8B20194A254BD7"
                     )
