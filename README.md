@@ -78,26 +78,28 @@ The Tap to Unlock technology for Android is based on Android's [Host-based Card 
 
 In this step, you create a subclass of `HostApduService`.
 
-The key component that you're going to use is an implementation of `IOfflineMode` interface; at the time of this writing, there is only one implementation called `Scram3`. This class requires three parameters to perform its duties:
+The key component that you're going to use is a class called `SecureUnlock`. This class requires three parameters to perform its duties:
 
 * An instance of Android's `Context` class
 * You integration partner specific id
 * And a callback that returns an instance of `Login` class wrapped in RxJava's [Maybe](http://reactivex.io/RxJava/3.x/javadoc/io/reactivex/rxjava3/core/Maybe.html)
 
+(There is also an extra parameter called `startWithProtocolVersion` which you should always set to `true` - this is an internal thing that goes through the testing phase now).
+
 See below how the sample implementation can look like.
 
 ```kotlin
 
-class ScramTestService : HostApduService() {
+class SecureUnlockService : HostApduService() {
 
-    private lateinit var offlineMode: Scram3
+    private lateinit var secureUnlock: SecureUnlock
 
     private var disposable: Disposable? = null
 
     override fun onCreate() {
         super.onCreate()
 
-        offlineMode = Scram3.with(
+        secureUnlock = SecureUnlock.with(
             clientId = 777,
             context = applicationContext,
             loginFetcher = { organizationId: Int? ->
@@ -118,7 +120,7 @@ class ScramTestService : HostApduService() {
     }
 
     override fun processCommandApdu(commandApdu: ByteArray, extras: Bundle?): ByteArray? {
-        disposable = offlineMode
+        disposable = secureUnlock
             .handle(commandApdu)
             .subscribeWith(
                 object : DisposableSingleObserver<ByteArray>() {
@@ -157,7 +159,7 @@ As a last step, you need to add the service to the app's manifest, as shown belo
     <application>
 
         <service
-            android:name=".ScramTestService"
+            android:name=".SecureUnlockService"
             android:exported="true"
             android:permission="android.permission.BIND_NFC_SERVICE">
 

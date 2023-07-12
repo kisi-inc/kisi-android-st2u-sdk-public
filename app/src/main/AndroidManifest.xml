@@ -23,7 +23,7 @@
         </activity>
 
         <service
-            android:name=".UnlockService"
+            android:name=".SecureUnlockService"
             android:exported="true"
             android:permission="android.permission.BIND_NFC_SERVICE">
             <intent-filter>

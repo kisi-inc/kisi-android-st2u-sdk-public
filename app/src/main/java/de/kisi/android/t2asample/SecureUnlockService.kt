@@ -3,23 +3,22 @@ package de.kisi.android.t2asample
 import android.nfc.cardemulation.HostApduService
 import android.os.Bundle
 import android.util.Log
-import de.kisi.android.st2u.IOfflineMode
 import de.kisi.android.st2u.Login
-import de.kisi.android.st2u.Scram3
+import de.kisi.android.st2u.SecureUnlock
 import io.reactivex.rxjava3.core.Maybe
 import io.reactivex.rxjava3.disposables.Disposable
 import io.reactivex.rxjava3.observers.DisposableSingleObserver
 
-class UnlockService : HostApduService() {
+class SecureUnlockService : HostApduService() {
 
-    private lateinit var offlineMode: IOfflineMode
+    private lateinit var secureUnlock: SecureUnlock
 
     private var disposable: Disposable? = null
 
     override fun onCreate() {
         super.onCreate()
 
-        offlineMode = Scram3.with(
+        secureUnlock = SecureUnlock.with(
             clientId = 777, // Replace it with an integration partner id you received from us
             context = applicationContext,
             loginFetcher = {
@@ -43,7 +42,7 @@ class UnlockService : HostApduService() {
     }
 
     override fun processCommandApdu(commandApdu: ByteArray, extras: Bundle?): ByteArray? {
-        disposable = offlineMode
+        disposable = secureUnlock
             .handle(commandApdu)
             .subscribeWith(
                 object : DisposableSingleObserver<ByteArray>() {
