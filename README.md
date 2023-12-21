@@ -144,7 +144,7 @@ class SecureUnlockService : HostApduService() {
 }
 ```
 
-An instance of `Login` contains four properties, all of which you will get while [signing the user in via Kisi's API](https://docs.google.com/document/d/1Rv_13f9uO2DInWOpOXIYQKj3NIZ-jdR1hi_MJLOaTgg/edit#heading=h.mu1n9ubjw7fj):
+An instance of `Login` contains four properties, all of which you will get while signing the user in via Kisi's API:
 
 * `id` corresponds to the `id` field of aforementioned request
 * `secret` corresponds to the `secret` field
