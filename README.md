@@ -48,8 +48,6 @@ Since your users won’t be able to log in to Kisi themselves, your app will nee
 
 You need to store this login object in your app's local cache and provide it to our SDK as a part of its initialization code. This login can then be used subsequently to make requests to the Kisi API on behalf of the user.
 
-**Note**: If you intend to support multiple organization accounts for the same user, you will need to create a separate login for each of these accounts. It is not possible to fetch all organization accounts associated with a specific email address due to security reasons. Therefore, you must store the list of their organization IDs yourself.
-
 ## 7. Integrate the SDK
 
 ### 7.1 Get the necessary files
