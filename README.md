@@ -4,10 +4,12 @@
 
 This SDK is for all Kisi partners and customers who want to integrate seamless access control into their own mobile app. Using the SDK, they can provide Kisi-powered mobile credentials for their end users, such as:
 * **Tap to unlock**: allowing users to open a door only by holding their mobile device up to a Kisi Reader
+* **Motion Sense unlocks**: allowing users to open a door by waving their hand in front of a Kisi Reader (available only Kisi Reader Pro 2.0 and newer)
 * **Tap in-app**: allowing users to unlock doors by tapping within their app.
 
 ## 2. What does this SDK include?
 * Tap to unlock functionality (also referred to as ‘Tap to access’)
+* Motion Sense functionality (also referred to as ‘Hand Wave unlocks’)
 * Kisi's BLE beacon scanner functionality. This is needed to satisfy the requirements of [reader restrictions](https://docs.kisi.io/concepts/restrictions#kisi-reader-restriction) for in-app unlocks. The reader restriction feature ensures that users may only unlock when standing in front of a door.
 
 ## 3. What this SDK doesn’t include
@@ -69,30 +71,28 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
 
     implementation "at.favre.lib:hkdf:1.1.0"
+    implementation 'com.github.weliem:blessed-android:2.5.0'
     implementation "io.reactivex.rxjava3:rxjava:3.0.0"
 }
 ```
 
-6. Sync the project with Gradle files.
+## 8. Sync the project with Gradle files.
 
-### 7.2 Create a subclass of `HostApduService`
-The Tap to Unlock technology for Android is based on Android's [Host-based Card Emulation](https://developer.android.com/guide/topics/connectivity/nfc/hce) (or HCE). This means, the integration of this SDK consists of tying together the Android's entry point into host card emulation (called [HostApduService](https://developer.android.com/reference/android/nfc/cardemulation/HostApduService)) and Kisi's code.
+### 8.1 Initialize secure unlocks
 
-In this step, you create a subclass of `HostApduService`.
-
-The key component that you're going to use is a class called `SecureUnlock`. This class requires three parameters to perform its duties:
+In this step, you're going to set up a `SecureUnlockConfiguration`, providing it with three key components:
 
 * An instance of Android's `Context` class
 * You integration partner specific id
 * And a callback that returns an instance of `Login` class wrapped in RxJava's [Maybe](http://reactivex.io/RxJava/3.x/javadoc/io/reactivex/rxjava3/core/Maybe.html)
 
-(There is also an extra parameter called `startWithProtocolVersion` which you should always set to `true` - this is an internal thing that goes through the testing phase now).
+Note: there is also an optional parameter called `onUnlockCompletedCallback` which would serve as a source of notifications on Tap / Motion Sense unlocks. You can use it to e.g. gather statistics on amount of unlocks happening through the SDK.
 
-See below how the sample implementation can look like.
+See below how the sample configuration can look like. We recommend to perform it in an implementation of Android's `Application` class to make sure it starts as early as possible.
 
 ```kotlin
 
-class SecureUnlockService : HostApduService() {
+class SecureUnlockApplication : Application() {
 
     private lateinit var secureUnlock: SecureUnlock
 
@@ -101,10 +101,10 @@ class SecureUnlockService : HostApduService() {
     override fun onCreate() {
         super.onCreate()
 
-        secureUnlock = SecureUnlock.with(
+        SecureUnlockConfiguration.init(
+            context = context,
             clientId = 777,
-            context = applicationContext,
-            loginFetcher = { organizationId: Int? ->
+            fetchLoginCallback = { organizationId: Int? ->
                 Maybe.just(
                     // ATTENTION - This is an example Login object that you will need to replace
                     // with a correct one obtained from Kisi's API. Read our integration docs
@@ -117,76 +117,22 @@ class SecureUnlockService : HostApduService() {
                     )
                 )
             },
-            onUnlockComplete = { }
+            onUnlockCompleteCallback = { unlockSource: UnlockSource, unlockError: UnlockError -> }
         )
-    }
-
-    override fun processCommandApdu(commandApdu: ByteArray, extras: Bundle?): ByteArray? {
-        disposable = secureUnlock
-            .handle(commandApdu)
-            .subscribeWith(
-                object : DisposableSingleObserver<ByteArray>() {
-                    override fun onSuccess(t: ByteArray) {
-                        sendResponseApdu(t)
-                    }
-
-                    override fun onError(e: Throwable) {
-                        sendResponseApdu(null)
-                    }
-                }
-            )
-
-        return null
-    }
-
-    override fun onDeactivated(reason: Int) {
-        disposable?.dispose()
-        disposable = null
     }
 }
 ```
 
-An instance of `Login` contains four properties, all of which you will get while signing the user in via Kisi's API:
+An instance of `Login` contains four properties, all of which you will get while [signing the user in via Kisi's API](https://docs.google.com/document/d/1Rv_13f9uO2DInWOpOXIYQKj3NIZ-jdR1hi_MJLOaTgg/edit#heading=h.mu1n9ubjw7fj):
 
 * `id` corresponds to the `id` field of aforementioned request
 * `secret` corresponds to the `secret` field
 * `phoneKey` corresponds to the `phone_key` field of the `scram_credentials` object
 * `onlineCertificate` corresponds to the `online_certificate` field of the `scram_credentials` object
 
-### 7.3 Add the service to the app's manifest
-As a last step, you need to add the service to the app's manifest, as shown below.
+**Note**: if you had an implementation of `HostApduService` class created for SDK versions 0.10 and older - you should remove it now as it's not needed anymore. Don't forget to remove it from your app's `AndroidManifest.xml` as well.
 
-```xml
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-
-        <service
-            android:name=".SecureUnlockService"
-            android:exported="true"
-            android:permission="android.permission.BIND_NFC_SERVICE">
-
-            <intent-filter>
-                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.nfc.cardemulation.host_apdu_service"
-                android:resource="@xml/hce_service" />
-        </service>
-
-    </application>
-</manifest>
-```
-
-`hce_service` is an XML file shipped with Kisi's SDK. It defines the set of properties used by Android OS to determine which of the installed applications will handle an incoming NFC connection.
-
-**Important notes:**
-
-1. You should not override the `hce_service` file, otherwise the Android OS won't pick your application as a handler of an incoming connection from Kisi's reader.
-2. Don't start this service yourself during e.g. the start of your application, as starting this service yourself will lead to unexpected results such as failed unlocks. It's Android OS's duty to start and stop this service when the smartphone is in the close vicinity of a reader.
-
-### 7.4 Test your app
+### 8.3 Test your app
 
 Once you’ve built your app, tap your Android device to your Kisi reader.
 
@@ -197,7 +143,7 @@ Tap to unlock does not require any specific Android permissions. All you need fr
 
 **Tip**: As an optional parameter, we recommend to provide the `onUnlockComplete` callback and log its argument in logcat to see the failure's reason (as shown in the example under 5.2).
 
-## 8. List of Errors
+## 9. The List of Errors
 
 The `UnlockError` enumeration defines the list of existing errors:
 
@@ -232,7 +178,76 @@ If the user has deliberately turned off notifications on their device, you can u
 
 * `UNEXPECTED_COMMAND` and `READER_PROOF_VALIDATION` - these are errors corresponding to the internal implementation of the unlock algorithm and are mainly exposed to be able to gather analytics.
 
-## 9. Satisfy reader restrictions in in-app unlocks
+## 9. Get started with Motion Sense
+Motion Sense (available starting from version 0.11) allows users to unlock doors by waving their hand in front of a Kisi Reader Pro 2.0 and later.
+
+### Create an account and sign in as described under 5.2
+### Log in as described under 5.3
+### Log in on behalf of your users as described under 6
+### Initialize `SecureUnlockConfiguration` as described under 8.2
+
+### 9.1 Motion Sense Permissions
+Unlike Tap-to-Access unlocks, Motion Sense unlocks require additional permissions. All these permissions will be added to your app's manifest file by the SDK, and some of them are considered to be runtime permissions, so you'll need to ask the users of your app to grant them.
+Here's the list of permissions that will be added to your app by our SDK to handle Motion Sense unlocks:
+
+```xml
+<manifest>
+    <!-- Needed to talk to nearby readers in Motion Sense mode on older devices (Android 11 and older) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Needed to talk to nearby readers in Motion Sense mode -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <!-- Needed to scan for Bluetooth devices like beacons -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" tools:node="replace" />
+
+    <!--Needed to resurrect the app's Motion Sense service after the device reboot-->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+</manifest>
+```
+
+Out of all those restrictions only the `*_LOCATION` and `BLUETOOTH_*` ones are considered to be runtime ones, so you'll need to request them somewhere in your app flow.
+
+### 9.2 Motion Sense and Battery Usage
+The latest versions of Android introduce some restrictions on how / when foreground services can be resurrected after a device reboot, so we recommend to ask your users to put the app into an Unrestricted Battery Usage list. This won't lead to excessive battery usage as we merely need it to be able to resurrect the service handling Motion Sense unlocks after the device reboot.
+Unfortunately, this setting is not handled as a permission, so you'll need to redirect your users to the app's details page and let them enable it here. Here's how it can be done in Kotlin:
+
+```kotlin
+    fun showAppDetails() {
+        try {
+            context?.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    .setData(Uri.fromParts("package", BuildConfig.APPLICATION_ID, null))
+            )
+        } catch (ignored : Exception) {
+            context?.startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
+        }
+    }
+```
+
+### 9.3 Enabling Motion Sense
+
+Motion Sense is disabled by default, so even if all permissions are granted, the service needed to turn it on won't be started. This is done so that you can have an additional degree of control on whether it's enabled or not. Enable it like this (you can do it in your `Application` class's `onCreate` method, or you can have a button in your app's UI to let your users do it on their own):
+
+```kotlin
+
+    MotionSenseSettings.isEnabled = true
+```
+
+### 9.4 Starting Motion Sense
+
+Finally, when all permissions (Bluetooth/Location) are granted and the app is moved into an Unrestricted Battery Usage list, we can start Motion Sense.
+
+```kotlin
+    MotionSenseStarter.start()
+```
+
+This will start a foreground service handling Motion Sense unlocks for you. This service will add a notification in the notification tray; your users can tap on "Disable" to disable Motion Sense (tapping this button will ultimately set `MotionSenseSettings#isEnabled` to false).
+
+## 10. Satisfy reader restrictions in in-app unlocks
 Tap in-app allows users to unlock doors from within your Android app. The tap sends the unlock request directly to the cloud, then to the controller, which fires the relay opening the door.
 
 **Note**: If you have implemented the Tap to unlock scenario discussed above, you can skip the bullets below and jump directly to 9.1. If not, please follow the steps below.
@@ -246,7 +261,7 @@ Tap in-app allows users to unlock doors from within your Android app. The tap se
 #### Log in as described under 5.3
 #### Log in on behalf of your users as described under 6
 
-### 9.1 Get the necessary files
+### 10.1 Get the necessary files
 
 1. Get your build files ready as described under 7.1.
 2. Add a further dependency, as shown below:
@@ -259,13 +274,14 @@ dependencies {
 
     implementation "at.favre.lib:hkdf:1.1.0"
     implementation "io.reactivex.rxjava3:rxjava:3.0.0"
+    implementation 'com.github.weliem:blessed-android:2.5.0'
     implementation 'aga.android:luch:0.3.1'
 }
 ```
 
-3. Sync the project with Gradle files.
+## 10.2 Sync the project with Gradle files.
 
-### 9.2 Add the required permissions
+### 10.3 Add the required permissions
 
 The Tap in-app scenario requires a few permissions, so you need to make sure to add these to your app's manifest, as shown below.
 
@@ -283,7 +299,7 @@ The Tap in-app scenario requires a few permissions, so you need to make sure to 
 * `ACCESS_FINE_LOCATION` is needed to be able to find BLE beacons. This is a restriction imposed by Android OS because, in theory, beacons can be used to derive physical location of a device. Note that this permission is considered to be a runtime/dangerous one in Android, which means the user might revoke it at any time (or even deny it). Therefore, you need to make sure Location permission is allowed for foreground usage and Bluetooth/Location services are turned on to find beacons.
 * `BLUETOOTH` and `BLUETOOTH_ADMIN` permissions are needed to be able to access Bluetooth APIs of Android OS. Both are considered to be normal, i.e. these are granted upon app installation.
 
-### 9.3 Create a Kisi beacon tracker
+### 10.4 Create a Kisi beacon tracker
 
 To make sure that users may only unlock when standing in front of the door, a [Kisi Reader restriction](https://docs.kisi.io/concepts/restrictions#kisi-reader-restriction) might be applied to the door. Therefore, while unlocking, your app will need to prove that the user is within the allowed distance from the reader.
 
@@ -291,23 +307,23 @@ To achieve this, you will have to obtain the door's `proximity_proof` (see [here
 
 To find the `proximity_proof`, you can use the class called `KisiBeaconTracker` shipped with this SDK. The instance of this class performs periodic Bluetooth Low Energy (or BLE) scans to find Kisi readers nearby. Each reader is equipped with a BLE beacon emitting a signal that contains this proof. Whenever a tracker finds a beacon, it calculates its proximity proof and delivers it to you. Whenever the reader is lost from the close vicinity (or its proximity proof is changed), you're notified as well.
 
-1. Create an instance of `KisiBeaconTracker` as shown below
+* Create an instance of `KisiBeaconTracker` as shown below
 
 **Tip**: it’s recommended that you do in the `Activity` hosting the list of locks, so that you will be able to use `Activity`'s lifecycle and start/stop scans accordingly):
 
 ```kotlin
 private val beaconTracker = KisiBeaconTracker(
     context,
-    onScanFailure = { e ->
+    onScanFailure = { e: Exception ->
         // Here you can get notifications about beacon scan failures
     },
-    onBeaconsDetected = { beacons ->
+    onBeaconsDetected = { beacons: List<KisiBeacon> ->
         // TODO handle beacons
     }
 )
 ```
 
-2. Start a scanner when activity is resumed, stop it when it's paused, as shown below:
+* Start a scanner when activity is resumed, stop it when it's paused, as shown below:
 
 ```kotlin
 override fun onResume() {
@@ -330,7 +346,7 @@ data class KisiBeacon(
 )
 ```
 
-### 9.4 Pass the proximity proof to the Kisi API
+### 10.4 Pass the proximity proof to the Kisi API
 
 Once you’ve found the totp parameter (shown above), you need to pass it into the Kisi API. You can do it by sending a POST request to the Kisi API’s Unlock lock endpoint, and entering the totp parameter as the proximity_proof, as shown below:
 
