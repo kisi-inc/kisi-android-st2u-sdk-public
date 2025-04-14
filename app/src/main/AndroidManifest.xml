@@ -2,17 +2,19 @@
 
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
-    package="de.kisi.android.t2asample">
+    package="de.kisi.android.sample">
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:name=".SecureUnlockSampleApplication">
 
         <activity
-            android:name=".MainActivity"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:name="de.kisi.android.sample.ui.MainActivity"
             android:exported="true">
 
             <intent-filter>
@@ -21,21 +23,6 @@
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
-
-        <service
-            android:name=".SecureUnlockService"
-            android:exported="true"
-            android:permission="android.permission.BIND_NFC_SERVICE">
-            <intent-filter>
-                <action android:name="android.nfc.cardemulation.action.HOST_APDU_SERVICE" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.nfc.cardemulation.host_apdu_service"
-                android:resource="@xml/hce_service" />
-        </service>
     </application>
 
 </manifest>
