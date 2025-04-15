@@ -1,4 +1,20 @@
 <resources>
-    <string name="app_name">T2A Sample</string>
-    <string name="info">Tap the reader with the phone. The reader should blink red or green depending on the access rights of the user. If nothing happens, please check that the data in the Login object from UnlockService is updated with the data you received from our API.</string>
+    <string name="app_name">Kisi\'s Secure Unlock Sample App</string>
+    <string name="info_nfc">NFC unlocks are enabled by default. Tap the reader with the phone. The reader should blink red or green depending on the access rights of the user. If nothing happens, please check that the data in the \'Login\' object in \'KisiUserSessionStorage\' is updated with the data you received from our API.</string>
+    <string name="info_motion_sense">Motion Sense unlocks are not enabled by default; you need to enable some permissions first. Enable permissions listed below and turn \"Motion Sense State\" switch on. If all permissions are granted and Motion Sense is enabled you should see a notification corresponding to the Motion Sense service. Read top-level README file for more details.</string>
+
+    <string name="bluetooth_permissions">Bluetooth Permission</string>
+    <string name="bluetooth_access">Bluetooth Access</string>
+    <string name="location_permissions">Location Permission</string>
+    <string name="location_access">Location Access</string>
+    <string name="battery_access">Battery Usage Access</string>
+
+    <string name="off">Off</string>
+    <string name="on">On</string>
+    <string name="grant">Grant</string>
+    <string name="enable">Enable</string>
+    <string name="motion_sense_state">Motion Sense State</string>
+    <string name="enabled">Enabled</string>
+    <string name="nfc_unlock_state">NFC Unlock State</string>
+    <string name="notifications_permission">Notifications Permission</string>
 </resources>
